@@ -11,12 +11,23 @@ namespace WinFrom
 {
     class Binary
     {
+        private int neighbor = 0;
+        private int adaptBlockSize = 0;
+        private int adapt_c = 0;
+        private int adaptiveTypes = 0;
+
+        public int Neighbor { set { neighbor=value;} }
+        public int AdaptBlockSize { set { adaptBlockSize = value; } }
+        public int Adapt_c { set { adapt_c = value; } }
+        public int AdaptiveTypes { set { adaptiveTypes = value; } }
+
         public enum OtsuType
         {
             Otsu = 0,
             VE = 1,      //ValleyEmphasis
             NVE = 2,
             WOV = 3,
+            Adaptive = 4,
         }
 
         public int Otsu(Mat Source, OutputArray _Dst, OtsuType Type)
@@ -39,6 +50,13 @@ namespace WinFrom
                         break;
                     case 3:
                         Threshold = BaseOtsuCompute(Src, (int)Type);
+                        break;
+                    case 4:
+                        if (adaptiveTypes == 0)
+                            Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
+                        else if (adaptiveTypes == 1)
+                            Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
+
                         break;
                     default:
                         break;
@@ -117,11 +135,20 @@ namespace WinFrom
                 }
                 else if (Type == 2)
                 {
-
+                    float[] NeighborValue = new float[256];
+                    NeighborValue = NeighborValleyEmphasis(Hist_Pi.ToArray(), neighbor);
+                    for (int k = 0; k < 256; k++)
+                    {
+                        if (NeighborValue[k] > 0)
+                            Delta.Add((1 - NeighborValue[k]) * (p0[k] * u0[k] * u0[k] + p1[k] * u1[k] * u1[k]));
+                        else
+                            Delta.Add(0);
+                    }
                 }
                 else
                 {
-
+                    for (int k = 0; k < 256; k++)
+                        Delta.Add(p0[k] * p0[k] * u0[k] * u0[k] + p1[k] * u1[k] * u1[k]);
                 }
 
                 float Max = float.MinValue;
@@ -134,8 +161,29 @@ namespace WinFrom
                     }
                 }
             }
-
             return VE_Threshold;
+        }
+
+
+        public float[] NeighborValleyEmphasis(float[] Hist_Float, int NeighborLen)
+        {
+            float[] NeighborValue = new float[256];
+
+            for (int Index = 0; Index < 256; Index++)
+            {
+                int init = Index - NeighborLen;
+                int end = Index + NeighborLen;
+                if (init < 0)
+                    init = 0;
+                if (end > 255)
+                    end = 255;
+                for (int i = init; i <= end; i++)
+                {
+                    NeighborValue[Index] += Hist_Float[i];
+                }
+            }
+
+            return NeighborValue;
         }
 
         public void GetHistogram_F(Mat Source, ref float[] Hist)
@@ -165,7 +213,7 @@ namespace WinFrom
             }
         }
 
-        public void GetHistogram(Mat Source,ref int[] Hist)
+        public void GetHistogram(Mat Source, ref int[] Hist)
         {
             unsafe
             {
@@ -184,111 +232,6 @@ namespace WinFrom
                     }
                 }
             }
-        }
-
-        public int ValleyEmphasis(Mat Source, int NeighborLen)
-        {
-            int VE_Threshold = 0;
-
-            using (Mat Src = new Mat())
-            {
-                Source.CopyTo(Src);
-
-                int[] Hist = new int[256];
-                float[] Hist_Float = new float[256];
-                float[] Vec = new float[256];
-
-                //GetHistogram(Src, ref Hist);
-                GetHistogram_F(Src, ref Hist_Float);
-                //double Xi = 0;
-                //double Nu = 0;
-                //double u = (double)Cv2.Mean(Constrast);
-                //for (int H = 1; H < Hist.Rows; H++)
-                //{
-                //    IntPtr ptr = Hist.Ptr(H);
-                //    float* p = (float*)ptr.ToPointer();
-                //    F.Add(p[0]);
-                //    Xi += H * H * p[0];
-                //}
-                //Nu = Hist.Rows * u * u;
-                //double StdDev = Math.Sqrt((Xi - Nu) / Total);
-
-
-                float p1, p2, p12;
-                //for (int k = 1; k != 255; k++)
-                //{
-                //    p1 = Px(0, k, Hist);
-                //    p2 = Px(k + 1, 255, Hist);
-                //    p12 = p1 * p2;
-                //    if (p12 == 0)
-                //        p12 = 1;
-                //    float diff = (Mx(0, k, Hist) * p2) - (Mx(k + 1, 255, Hist) * p1);
-                //    Vec[k] = (float)diff * diff / p12;
-                //}
-                int MinIndex = 0;
-                float MinVec = float.MaxValue;
-
-                for (int k = 1; k < 255; k++)
-                {
-                    p1 = 0;//Ux(0, k, Hist_Float);
-                    p2 = 0;// Ux(k + 1, 255, Hist_Float);
-                    p12 = p1 + p2;
-
-                    if (p12 < MinVec)
-                    {
-                        MinVec = p12;
-                        MinIndex = k;
-                    }
-
-                }
-
-
-                Console.WriteLine(MinIndex);
-
-                int TotalPixel = Src.Cols * Src.Rows;
-                float[] H = new float[256];
-                float[] NeighborValue = new float[256];
-                float[] Delta = new float[256];
-
-                float HistMax = float.MinValue;
-                for (int i = 0; i < 256; i++)
-                {
-                    if (HistMax < Hist_Float[i])
-                        HistMax = Hist_Float[i];
-                }
-
-                for (int i = 0; i < 256; i++)
-                {
-                    H[i] = (float)Hist_Float[i] / HistMax;// TotalPixel;
-                }
-
-                for (int Index = 0; Index < 256; Index++)
-                {
-                    int init = Index - NeighborLen;
-                    int end = Index + NeighborLen;
-                    if (init < 0)
-                        init = 0;
-                    if (end > 255)
-                        end = 255;
-                    for (int i = init; i <= end; i++)
-                    {
-                        NeighborValue[Index] += H[i];
-                    }
-                    Delta[Index] = (1 - NeighborValue[Index]) * Hist_Float[Index];
-                }
-
-                float Max = float.MinValue;
-                for (int i = 0; i < 256; i++)
-                {
-                    if (Delta[i] > Max)
-                    {
-                        Max = Delta[i];
-                        VE_Threshold = i;
-                    }
-                }
-            }
-
-            return VE_Threshold;
         }
 
     }
