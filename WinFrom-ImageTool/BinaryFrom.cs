@@ -25,6 +25,7 @@ namespace WinFrom
         private string _FileImagePath = "";
         private int _ImageMaxWidth = 0;
         private bool _Freeze = false;         //避免 trackBarScrollTh() 資料更動而多執行 ThresholdChange()
+        private int _MouseWheel_TriggerCount = 0;
 
         // https://blog.xuite.net/f8789/DCLoveEP/33810131-C%23+-+%E4%BD%BF%E7%94%A8+List%3CT%3E+%E7%82%BA+ComboBox+%E5%8A%A0%E5%85%A5+Item
         protected class AdaptTypeCoboxList
@@ -395,10 +396,12 @@ namespace WinFrom
 
         private void ThresholdChange(object sender, EventArgs e)
         {
+            _MouseWheel_TriggerCount++;
             label_Th.Text = "Threshold: ";
 
-            if (_SourceImage != null && !_Freeze)
+            if (_SourceImage != null && !_Freeze && _MouseWheel_TriggerCount>=3)
             {
+                _MouseWheel_TriggerCount = 0;
                 _Freeze = true;
 
                 Mat Dst = new Mat();
@@ -434,10 +437,14 @@ namespace WinFrom
 
         void AdaptSizeChange(object sender, EventArgs e)
         {
+            _MouseWheel_TriggerCount++;
             Console.WriteLine("AdaptSizeChange");
 
-            if (_SourceImage != null)
+            if (_SourceImage != null && _MouseWheel_TriggerCount>=3)
             {
+                _MouseWheel_TriggerCount = 0;
+                Console.WriteLine("AdaptSizeChange_Into");
+
                 label_Th.Text = "Threshold: NON";
                 Mat Dst = new Mat();
                 using (Mat Src = new Mat(_FileImagePath))
@@ -472,8 +479,11 @@ namespace WinFrom
 
         void AdaptC_Change(object sender, EventArgs e)
         {
-            if (_SourceImage != null)
+            _MouseWheel_TriggerCount++;
+
+            if (_SourceImage != null && _MouseWheel_TriggerCount >= 3)
             {
+                _MouseWheel_TriggerCount = 0;
                 label_Th.Text = "Threshold: NON";
 
                 Mat Dst = new Mat();
@@ -514,7 +524,6 @@ namespace WinFrom
 
             int numberOfTextLinesToMove = e.Delta;
             Neighbor.Increment = 1m / SystemInformation.MouseWheelScrollLines;
-
             if (numberOfTextLinesToMove > 0 && ThresholdValue.Value < 0)
                 ThresholdValue.Value = 0;
         }
@@ -532,10 +541,6 @@ namespace WinFrom
         {
             int numberOfTextLinesToMove = e.Delta;
             UpDown_AdaptSize.Increment = 2m / SystemInformation.MouseWheelScrollLines;
-
-            // 值向下需由2m -> 5m
-            if (numberOfTextLinesToMove < 0)
-                UpDown_AdaptSize.Increment = 5m / SystemInformation.MouseWheelScrollLines;
 
             if (UpDown_AdaptSize.Value < 3)
                 UpDown_AdaptSize.Value = 3;   
