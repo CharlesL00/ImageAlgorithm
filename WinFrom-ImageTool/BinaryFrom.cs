@@ -26,16 +26,16 @@ namespace WinFrom
         private int _ImageMaxWidth = 0;
         private bool _Freeze = false;         //避免 trackBarScrollTh() 資料更動而多執行 ThresholdChange()
         private int _MouseWheel_TriggerCount = 0;
+        private decimal _MouseWheel_ErrorCompensation = 0; //updowm 物件於滑鼠滾動時會產生細微誤差而變數有誤
+        
 
-        // https://blog.xuite.net/f8789/DCLoveEP/33810131-C%23+-+%E4%BD%BF%E7%94%A8+List%3CT%3E+%E7%82%BA+ComboBox+%E5%8A%A0%E5%85%A5+Item
         protected class AdaptTypeCoboxList
         {
             private string _AdaptType;
-            private int _AdaptMethodNumber;
+            private AdaptiveThresholdTypes _AdaptMethodNumber;
+
             public string AdaptType { get { return _AdaptType; } set { _AdaptType = value; } }
-            public int AdaptMethodNumber { get { return _AdaptMethodNumber; } set { _AdaptMethodNumber = value; } }
-            //public string AdaptType { get; set; }
-            //public int AdaptMethodNumber { get; set; }
+            public AdaptiveThresholdTypes AdaptMethodNumber { get { return _AdaptMethodNumber; } set { _AdaptMethodNumber = value; } }
         }
 
         public BinaryFrom()
@@ -47,16 +47,20 @@ namespace WinFrom
                 new AdaptTypeCoboxList()
                 {
                     AdaptType = "GaussianC",
-                    AdaptMethodNumber = 0
+                    AdaptMethodNumber = AdaptiveThresholdTypes.GaussianC
                 },
                 new AdaptTypeCoboxList()
                 {
                     AdaptType = "MeanC",
-                    AdaptMethodNumber = 1
+                    AdaptMethodNumber = AdaptiveThresholdTypes.MeanC
                 }
             };
             comboBox_AdaptType.DataSource = AdaptTypeSet;
             comboBox_AdaptType.DisplayMember = "AdaptType";
+            comboBox_AdaptType.ValueMember = "AdaptMethodNumber";
+
+            //初始化 comboBox
+            binary.AdaptiveTypes = (AdaptiveThresholdTypes)comboBox_AdaptType.SelectedValue;
         }
 
         private void btnOpenFile_Click(object sender, EventArgs e)
@@ -246,6 +250,9 @@ namespace WinFrom
                     label_Th.Text += Threshold.ToString();
                     ThresholdValue.Value = Threshold;
                     trackBar_Th.Value = Threshold;
+
+                    //避免 ThresholdValue值更動而觸發
+                    _MouseWheel_TriggerCount = 0;
                 }
                 pictureBox2.Image = MatToBitmap(Dst);
             }
@@ -310,6 +317,8 @@ namespace WinFrom
                         binary.AdaptBlockSize = AdaptSize;
 
                     binary.Adapt_c = (int)UpDown_AdaptC.Value;
+
+                    //binary.AdaptiveTypes = (AdaptiveThresholdTypes)comboBox_AdaptType.SelectedValue;
                     binary.Otsu(Gray, Dst, Binary.OtsuType.Adaptive);
 
                     //Drawing Color
@@ -356,10 +365,9 @@ namespace WinFrom
 
         private void trackBarScrollTh(object sender, EventArgs e)
         {
-            label_Th.Text = "Threshold: ";
-
             if (_SourceImage != null && !_Freeze)
             {
+                label_Th.Text = "Threshold: ";
                 _Freeze = true;
 
                 Mat Dst = new Mat();
@@ -394,13 +402,56 @@ namespace WinFrom
 
         }
 
+        private void NeighborChange(object sender, EventArgs e)
+        {
+            _MouseWheel_TriggerCount++;
+
+            if (_SourceImage != null && !_Freeze && _MouseWheel_TriggerCount >= 3)
+            {
+                label_Th.Text = "Threshold: ";
+                _MouseWheel_TriggerCount = 0;
+                Mat Dst = new Mat();
+                using (Mat Src = new Mat())
+                using (Mat Gray = new Mat())
+                {
+                    _SourceImage.CopyTo(Src);
+
+                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+
+                    if (check_Negative.Checked)
+                        Tool.Negative(Gray, Gray);
+
+                    binary.Neighbor = (int)(Neighbor.Value + _MouseWheel_ErrorCompensation);
+                    int Threshold = binary.Otsu(Gray, Dst, Binary.OtsuType.NVE);
+                    Cv2.Threshold(Gray, Dst, Threshold, 255, ThresholdTypes.Binary);
+
+                    //Drawing Color
+                    Tool.SetColor(255, 0, 0);
+                    if (check_DrawingColor.Checked)
+                        Tool.OutColor(Gray, Dst, Dst, true);
+
+                    label_Th.Text += Threshold.ToString();
+                    ThresholdValue.Value = Threshold;
+                    trackBar_Th.Value = Threshold;
+
+                    //避免 ThresholdValue值更動而觸發
+                    _MouseWheel_TriggerCount = 0;
+                }
+                pictureBox2.Image = MatToBitmap(Dst);
+            }
+            else
+            {
+                trackBar_Th.Value = (int)(ThresholdValue.Value + _MouseWheel_ErrorCompensation);
+            }
+        }
+
         private void ThresholdChange(object sender, EventArgs e)
         {
             _MouseWheel_TriggerCount++;
-            label_Th.Text = "Threshold: ";
 
             if (_SourceImage != null && !_Freeze && _MouseWheel_TriggerCount>=3)
             {
+                label_Th.Text = "Threshold: ";
                 _MouseWheel_TriggerCount = 0;
                 _Freeze = true;
 
@@ -415,7 +466,7 @@ namespace WinFrom
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
 
-                    int Threshold = (int)ThresholdValue.Value;
+                    int Threshold = (int)(ThresholdValue.Value  + _MouseWheel_ErrorCompensation);
                     trackBar_Th.Value = Threshold;
                     Cv2.Threshold(Gray, Dst, Threshold, 255, ThresholdTypes.Binary);
 
@@ -438,12 +489,10 @@ namespace WinFrom
         void AdaptSizeChange(object sender, EventArgs e)
         {
             _MouseWheel_TriggerCount++;
-            Console.WriteLine("AdaptSizeChange");
 
             if (_SourceImage != null && _MouseWheel_TriggerCount>=3)
             {
                 _MouseWheel_TriggerCount = 0;
-                Console.WriteLine("AdaptSizeChange_Into");
 
                 label_Th.Text = "Threshold: NON";
                 Mat Dst = new Mat();
@@ -455,8 +504,7 @@ namespace WinFrom
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
 
-                    // 2020/03/16 Bug-會錯值
-                    int AdaptSize = (int)UpDown_AdaptSize.Value;
+                    int AdaptSize = (int)(UpDown_AdaptSize.Value + _MouseWheel_ErrorCompensation);
                     if (AdaptSize < 3)
                         binary.AdaptBlockSize = 3;
                     else if (AdaptSize % 2 == 0)
@@ -464,7 +512,8 @@ namespace WinFrom
                     else
                         binary.AdaptBlockSize = AdaptSize;
 
-                    binary.Adapt_c = (int)UpDown_AdaptC.Value;
+                    binary.Adapt_c = (int)(UpDown_AdaptC.Value  + _MouseWheel_ErrorCompensation);
+
                     binary.Otsu(Gray, Dst, Binary.OtsuType.Adaptive);
 
                     //Drawing Color
@@ -495,13 +544,13 @@ namespace WinFrom
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
 
-                    int AdaptSize = (int)UpDown_AdaptSize.Value;
+                    int AdaptSize = (int)(UpDown_AdaptSize.Value + _MouseWheel_ErrorCompensation);
                     if (AdaptSize % 2 == 0)
                         binary.AdaptBlockSize = AdaptSize - 1;
                     else
                         binary.AdaptBlockSize = AdaptSize;
 
-                    binary.Adapt_c = (int)UpDown_AdaptC.Value;
+                    binary.Adapt_c = (int)(UpDown_AdaptC.Value + _MouseWheel_ErrorCompensation);
                     binary.Otsu(Gray, Dst, Binary.OtsuType.Adaptive);
 
                     //Drawing Color
@@ -524,6 +573,8 @@ namespace WinFrom
 
             int numberOfTextLinesToMove = e.Delta;
             Neighbor.Increment = 1m / SystemInformation.MouseWheelScrollLines;
+            _MouseWheel_ErrorCompensation = Neighbor.Increment;
+
             if (numberOfTextLinesToMove > 0 && ThresholdValue.Value < 0)
                 ThresholdValue.Value = 0;
         }
@@ -532,15 +583,25 @@ namespace WinFrom
         {
             int numberOfTextLinesToMove = e.Delta;
             ThresholdValue.Increment = 1m / SystemInformation.MouseWheelScrollLines;
+            _MouseWheel_ErrorCompensation = ThresholdValue.Increment;
 
             if (ThresholdValue.Value < 0)
                 ThresholdValue.Value = 0;            
+        }
+
+        void trackBar_Th_MouseWheel(object sender, MouseEventArgs e)
+        {
+            //int numberOfTextLinesToMove = e.Delta;
+            //trackBar_Th.Scroll = 1m / SystemInformation.MouseWheelScrollLines;
+            //if (numberOfTextLinesToMove > 0 && ThresholdValue.Value < 0)
+            //    ThresholdValue.Value = 0;
         }
 
         void UpDown_AdaptSize_MouseWheel(object sender, MouseEventArgs e)
         {
             int numberOfTextLinesToMove = e.Delta;
             UpDown_AdaptSize.Increment = 2m / SystemInformation.MouseWheelScrollLines;
+            _MouseWheel_ErrorCompensation = UpDown_AdaptSize.Increment;
 
             if (UpDown_AdaptSize.Value < 3)
                 UpDown_AdaptSize.Value = 3;   
@@ -550,9 +611,18 @@ namespace WinFrom
         {
             int numberOfTextLinesToMove = e.Delta;
             UpDown_AdaptC.Increment = 1m / SystemInformation.MouseWheelScrollLines;
+            _MouseWheel_ErrorCompensation = UpDown_AdaptC.Increment;
 
             if (UpDown_AdaptC.Value < 0)
                 UpDown_AdaptC.Value = 0;
+        }
+
+
+        // -------------------------- ComboBox選擇事件 --------------------------
+
+        private void comboBox_AdaptType_SelectionChangeCommitted(object sender, EventArgs e)
+        {
+            binary.AdaptiveTypes = (AdaptiveThresholdTypes)comboBox_AdaptType.SelectedValue;
         }
     }
 }

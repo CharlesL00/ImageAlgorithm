@@ -15,12 +15,12 @@ namespace WinFrom
         private int neighbor = 0;
         private int adaptBlockSize = 0;
         private int adapt_c = 0;
-        private int adaptiveTypes = 0;
+        private AdaptiveThresholdTypes adaptiveTypes = 0;
 
         public int Neighbor { set { neighbor = value; } }
         public int AdaptBlockSize { set { adaptBlockSize = value; } }
         public int Adapt_c { set { adapt_c = value; } }
-        public int AdaptiveTypes { set { adaptiveTypes = value; } }
+        public AdaptiveThresholdTypes AdaptiveTypes { set { adaptiveTypes = value; } }
 
         public enum OtsuType
         {
@@ -35,8 +35,10 @@ namespace WinFrom
         {
             Mat Dst = _Dst.GetMat();
             int Threshold = 0;
+
             using (Mat Src = new Mat())
             {
+                
                 Source.CopyTo(Src);
                 switch((int)Type)
                 {
@@ -53,11 +55,12 @@ namespace WinFrom
                         Threshold = BaseOtsuCompute(Src, (int)Type);
                         break;
                     case 4:
-                        if (adaptiveTypes == 0)
-                            Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
-                        else if (adaptiveTypes == 1)
-                            Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
-
+                        //if (adaptiveTypes == 0)
+                        //    Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
+                        //else if (adaptiveTypes == 1)
+                        //    Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
+                        Cv2.AdaptiveThreshold(Src, Dst, 255, adaptiveTypes, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
+                        Console.WriteLine(adaptiveTypes.ToString());
                         break;
                     default:
                         break;
