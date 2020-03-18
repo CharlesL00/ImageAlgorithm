@@ -65,6 +65,141 @@ namespace WinFrom
             binary.MorphTypes = (MorphTypes)comBox_MorphType.SelectedValue;
         }
 
+        public Bitmap MatToBitmap(Mat image)
+        {
+            try
+            {
+                return OpenCvSharp.Extensions.BitmapConverter.ToBitmap(image);
+            }
+            catch (Exception e) 
+            { 
+                return null; 
+            }
+        }
+
+        public Mat BitmapToMat(Bitmap image)
+        {
+            try
+            {
+                return OpenCvSharp.Extensions.BitmapConverter.ToMat(image);
+            }
+            catch (Exception e)
+            {
+                return null;
+            }
+        }
+
+        private void InitializeComboBox()
+        {
+            List<AdaptTypeCoboxList> AdaptTypeSet = new List<AdaptTypeCoboxList>()
+            {
+                new AdaptTypeCoboxList()
+                {
+                    AdaptType = "GaussianC",
+                    AdaptMethodNumber = AdaptiveThresholdTypes.GaussianC
+                },
+                new AdaptTypeCoboxList()
+                {
+                    AdaptType = "MeanC",
+                    AdaptMethodNumber = AdaptiveThresholdTypes.MeanC
+                }
+            };
+            comBox_AdaptType.DataSource = AdaptTypeSet;
+            comBox_AdaptType.DisplayMember = "AdaptType";
+            comBox_AdaptType.ValueMember = "AdaptMethodNumber";
+
+            List<MorphTypesCoboxList> MorphologyTypeSet = new List<MorphTypesCoboxList>()
+            {
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "Dilate",
+                    MorphologyMethod = MorphTypes.Dilate
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "Erode",
+                    MorphologyMethod = MorphTypes.Erode
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "Close",
+                    MorphologyMethod = MorphTypes.Close
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "Open",
+                    MorphologyMethod = MorphTypes.Open
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "TopHat",
+                    MorphologyMethod = MorphTypes.TopHat
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "BlackHat",
+                    MorphologyMethod = MorphTypes.BlackHat
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "Gradient",
+                    MorphologyMethod = MorphTypes.Gradient
+                },
+                new MorphTypesCoboxList()
+                {
+                    MorphologyType = "HitMiss",
+                    MorphologyMethod = MorphTypes.HitMiss
+                }
+            };
+            comBox_MorphType.DataSource = MorphologyTypeSet;
+            comBox_MorphType.DisplayMember = "MorphologyType";
+            comBox_MorphType.ValueMember = "MorphologyMethod";
+        }
+
+        private Mat Process_Morphology()
+        {
+            Mat Dst = new Mat();
+            using (Mat MorphMat = new Mat())
+            {
+                _SourceImage.CopyTo(MorphMat);
+
+                if (check_Negative.Checked)
+                    Tool.Negative(MorphMat, MorphMat);
+
+                if (binary.MorphTypes != MorphTypes.HitMiss)
+                {
+                    int x = (int)(UpDown_Morphology_x.Value + _MouseWheel_ErrorCompensation);
+                    int y = (int)(UpDown_Morphology_y.Value + _MouseWheel_ErrorCompensation);
+                    binary.Morphology(MorphMat, Dst, x, y);
+
+                    //Drawing Color
+                    Tool.SetColor(255, 0, 0);
+                    if (check_DrawingColor.Checked)
+                    {
+                        if (Dst.Channels() == 1)
+                        {
+                            using (Mat Src = new Mat())
+                            {
+                                _SourceImage.CopyTo(Src);
+                                Tool.OutColor(Src, Dst, Dst, true);
+                            }
+                        }
+                        else
+                        {
+                            MessageBox.Show("Don't Drawing Color,Image Not One Channel");
+                        }
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("Image Must One Channel In 'HitMiss' Type");
+                }
+            }
+            return Dst;
+        }
+
+        // -------------------------- 按鍵事件 --------------------------
+
         private void btnOpenFile_Click(object sender, EventArgs e)
         {
             OpenFileDialog OpFDialog = new OpenFileDialog();
@@ -81,7 +216,8 @@ namespace WinFrom
                     _InputImage = new Mat();
                     Src.CopyTo(_InputImage);
                     Src.CopyTo(_SourceImage);
-                    
+
+                    Cv2.CvtColor(_SourceImage, _SourceImage, ColorConversionCodes.BGR2GRAY);
                     if (Src.Cols > Src.Rows)
                         _ImageMaxWidth = Src.Cols;
                     else
@@ -133,27 +269,27 @@ namespace WinFrom
             }
         }
 
-        public Bitmap MatToBitmap(Mat image)
+        private void btn_Replace_Click(object sender, EventArgs e)
         {
-            try
+            if (pictureBox1.Image != null && pictureBox2.Image != null)
             {
-                return OpenCvSharp.Extensions.BitmapConverter.ToBitmap(image);
-            }
-            catch (Exception e) 
-            { 
-                return null; 
+                _RecoveryImage.Add(new Mat());
+                int LastIndex = _RecoveryImage.Count() - 1;
+
+                BitmapToMat((Bitmap)pictureBox1.Image).CopyTo(_RecoveryImage[LastIndex]);
+                pictureBox1.Image = pictureBox2.Image;
+                _SourceImage = BitmapToMat((Bitmap)pictureBox2.Image);
             }
         }
 
-        public Mat BitmapToMat(Bitmap image)
+        private void btn_Recovery_Click(object sender, EventArgs e)
         {
-            try
+            int ImgCount = _RecoveryImage.Count();
+            if (_RecoveryImage.Count > 0)
             {
-                return OpenCvSharp.Extensions.BitmapConverter.ToMat(image);
-            }
-            catch (Exception e)
-            {
-                return null;
+                pictureBox1.Image = MatToBitmap(_RecoveryImage[ImgCount - 1]);
+                _RecoveryImage[ImgCount - 1].Dispose();
+                _RecoveryImage.RemoveAt(ImgCount - 1);
             }
         }
 
@@ -163,6 +299,12 @@ namespace WinFrom
             {
                 _SourceImage = _InputImage;
                 pictureBox2.Image = MatToBitmap(_SourceImage);
+                for (int Index = _RecoveryImage.Count(); Index > 0;Index-- )
+                {
+                    _RecoveryImage[Index - 1].Dispose();
+                    _RecoveryImage.RemoveAt(Index - 1);
+                }
+                GC.Collect();
             }
             else
             {
@@ -177,12 +319,9 @@ namespace WinFrom
             if (_SourceImage != null)
             {
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -210,12 +349,9 @@ namespace WinFrom
             if (_SourceImage != null)
             {
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -243,12 +379,9 @@ namespace WinFrom
             if (_SourceImage != null)
             {
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -280,12 +413,9 @@ namespace WinFrom
             if (_SourceImage != null)
             {
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -315,12 +445,9 @@ namespace WinFrom
                 label_Th.Text = "Threshold: NON";
 
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -333,7 +460,6 @@ namespace WinFrom
 
                     binary.Adapt_c = (int)UpDown_AdaptC.Value;
 
-                    //binary.AdaptiveTypes = (AdaptiveThresholdTypes)comboBox_AdaptType.SelectedValue;
                     binary.Otsu(Gray, Dst, Binary.OtsuType.Adaptive);
 
                     //Drawing Color
@@ -353,12 +479,9 @@ namespace WinFrom
             if (_SourceImage != null)
             {
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -396,12 +519,9 @@ namespace WinFrom
                 _Freeze = true;
 
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -436,12 +556,9 @@ namespace WinFrom
                 label_Th.Text = "Threshold: ";
                 _MouseWheel_TriggerCount = 0;
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -481,12 +598,9 @@ namespace WinFrom
                 _Freeze = true;
 
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat())
                 using (Mat Gray = new Mat())
                 {
-                    _SourceImage.CopyTo(Src);
-
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -521,10 +635,9 @@ namespace WinFrom
 
                 label_Th.Text = "Threshold: NON";
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat(_FileImagePath))
                 using (Mat Gray = new Mat())
                 {
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -561,10 +674,9 @@ namespace WinFrom
                 label_Th.Text = "Threshold: NON";
 
                 Mat Dst = new Mat();
-                using (Mat Src = new Mat(_FileImagePath))
                 using (Mat Gray = new Mat())
                 {
-                    Cv2.CvtColor(Src, Gray, ColorConversionCodes.BGR2GRAY);
+                    _SourceImage.CopyTo(Gray);
 
                     if (check_Negative.Checked)
                         Tool.Negative(Gray, Gray);
@@ -609,47 +721,6 @@ namespace WinFrom
 
         }
 
-        private Mat Process_Morphology()
-        {
-            Mat Dst = new Mat();
-            using (Mat MorphMat = new Mat())
-            {
-                _SourceImage.CopyTo(MorphMat);
-
-                if (check_Negative.Checked)
-                    Tool.Negative(MorphMat, MorphMat);
-
-                if (binary.MorphTypes != MorphTypes.HitMiss)
-                {
-                    int x = (int)(UpDown_Morphology_x.Value + _MouseWheel_ErrorCompensation);
-                    int y = (int)(UpDown_Morphology_y.Value + _MouseWheel_ErrorCompensation);
-                    binary.Morphology(MorphMat, Dst, x, y);
-
-                    //Drawing Color
-                    Tool.SetColor(255, 0, 0);
-                    if (check_DrawingColor.Checked)
-                    {
-                        if (Dst.Channels() == 1)
-                        {
-                            using (Mat Src = new Mat())
-                            {
-                                _SourceImage.CopyTo(Src);
-                                Tool.OutColor(Src, Dst, Dst, true);
-                            }
-                        }
-                        else
-                        {
-                            MessageBox.Show("Don't Drawing Color,Image Not One Channel");
-                        }
-                    }
-                }
-                else
-                {
-                    MessageBox.Show("Image Must One Channel In 'HitMiss' Type");
-                }
-            }
-            return Dst;
-        }
         // -------------------------- 上下按鈕控制事件 --------------------------
 
         void Neighbor_MouseWheel(object sender, MouseEventArgs e)
@@ -741,98 +812,7 @@ namespace WinFrom
             binary.MorphTypes = (MorphTypes)comBox_MorphType.SelectedValue;
         }
 
-
-
         //-------------------------
-        private void InitializeComboBox()
-        {
-            List<AdaptTypeCoboxList> AdaptTypeSet = new List<AdaptTypeCoboxList>()
-            {
-                new AdaptTypeCoboxList()
-                {
-                    AdaptType = "GaussianC",
-                    AdaptMethodNumber = AdaptiveThresholdTypes.GaussianC
-                },
-                new AdaptTypeCoboxList()
-                {
-                    AdaptType = "MeanC",
-                    AdaptMethodNumber = AdaptiveThresholdTypes.MeanC
-                }
-            };
-            comBox_AdaptType.DataSource = AdaptTypeSet;
-            comBox_AdaptType.DisplayMember = "AdaptType";
-            comBox_AdaptType.ValueMember = "AdaptMethodNumber";
 
-            List<MorphTypesCoboxList> MorphologyTypeSet = new List<MorphTypesCoboxList>()
-            {
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "Dilate",
-                    MorphologyMethod = MorphTypes.Dilate
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "Erode",
-                    MorphologyMethod = MorphTypes.Erode
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "Close",
-                    MorphologyMethod = MorphTypes.Close
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "Open",
-                    MorphologyMethod = MorphTypes.Open
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "TopHat",
-                    MorphologyMethod = MorphTypes.TopHat
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "BlackHat",
-                    MorphologyMethod = MorphTypes.BlackHat
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "Gradient",
-                    MorphologyMethod = MorphTypes.Gradient
-                },
-                new MorphTypesCoboxList()
-                {
-                    MorphologyType = "HitMiss",
-                    MorphologyMethod = MorphTypes.HitMiss
-                }
-            };
-            comBox_MorphType.DataSource = MorphologyTypeSet;
-            comBox_MorphType.DisplayMember = "MorphologyType";
-            comBox_MorphType.ValueMember = "MorphologyMethod";
-        }
-
-        private void btn_Replace_Click(object sender, EventArgs e)
-        {
-            if (pictureBox1.Image != null && pictureBox2.Image != null)
-            {
-                _RecoveryImage.Add(new Mat());
-                int LastIndex = _RecoveryImage.Count()-1;
-
-                BitmapToMat((Bitmap)pictureBox1.Image).CopyTo(_RecoveryImage[LastIndex]);
-                pictureBox1.Image = pictureBox2.Image;
-                _SourceImage = BitmapToMat((Bitmap)pictureBox2.Image);
-            }
-        }
-
-        private void btn_Recovery_Click(object sender, EventArgs e)
-        {
-            int ImgCount=_RecoveryImage.Count();
-            if (_RecoveryImage.Count > 0)
-            {
-                pictureBox1.Image = MatToBitmap(_RecoveryImage[ImgCount-1]);
-                _RecoveryImage[ImgCount - 1].Dispose();
-                _RecoveryImage.RemoveAt(ImgCount - 1);
-            }
-        }
     }
 }
