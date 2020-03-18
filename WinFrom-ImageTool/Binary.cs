@@ -16,11 +16,13 @@ namespace WinFrom
         private int adaptBlockSize = 0;
         private int adapt_c = 0;
         private AdaptiveThresholdTypes adaptiveTypes = 0;
+        private MorphTypes _MorphTypes = 0;
 
         public int Neighbor { set { neighbor = value; } }
         public int AdaptBlockSize { set { adaptBlockSize = value; } }
         public int Adapt_c { set { adapt_c = value; } }
         public AdaptiveThresholdTypes AdaptiveTypes { set { adaptiveTypes = value; } }
+        public MorphTypes MorphTypes { get { return _MorphTypes; } set { _MorphTypes = value; } }
 
         public enum OtsuType
         {
@@ -55,15 +57,12 @@ namespace WinFrom
                         Threshold = BaseOtsuCompute(Src, (int)Type);
                         break;
                     case 4:
-                        //if (adaptiveTypes == 0)
-                        //    Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
-                        //else if (adaptiveTypes == 1)
-                        //    Cv2.AdaptiveThreshold(Src, Dst, 255, AdaptiveThresholdTypes.MeanC, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
                         Cv2.AdaptiveThreshold(Src, Dst, 255, adaptiveTypes, ThresholdTypes.Binary, adaptBlockSize, adapt_c);
-                        Console.WriteLine(adaptiveTypes.ToString());
                         break;
                     default:
                         break;
+
+
                 }
             }
 
@@ -168,6 +167,20 @@ namespace WinFrom
             return VE_Threshold;
         }
 
+        public void Morphology(Mat Source, OutputArray _Dst, int x, int y)
+        {
+            Mat Dst = _Dst.GetMat();
+
+            using (Mat Src = new Mat())
+            {
+                Source.CopyTo(Src);
+
+                var Element = Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(x,y), new OpenCvSharp.Point(-1, -1));
+                Cv2.MorphologyEx(Src, Dst, _MorphTypes, Element);
+                Console.WriteLine("x: " + x.ToString() + "y: " + y.ToString());
+                Console.WriteLine(_MorphTypes);
+            }
+        }
 
         public float[] NeighborValleyEmphasis(float[] Hist_Float, int NeighborLen)
         {
